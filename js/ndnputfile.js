@@ -1,8 +1,8 @@
 // Store an NDN content object segment
 
-
-var ndnPutFile = function (file, name) {
-  console.log(file);
+var ndnPutFile = function (name, file, destination, callback) {
+  
+  //start by organizing the data into an array of ndn buffer segments
   var chunkSize = 7000;
   var fileSize = (file.size - 1);
   var ndnArray = []
@@ -17,9 +17,13 @@ var ndnPutFile = function (file, name) {
           reader.onload = loaded;
           reader.readAsDataURL(blob);
       })( file, i );
+     
   };
-  function onInterest(prefix, interest, transport)
-    {
+  
+
+
+  if (destination instanceof Face) { //we're putting a file to an ndnr over the network
+    function onInterest(prefix, interest, transport) {
       console.log("onInterest called.", interest.name.components.length, ndnArray[ndnArray.length - 1]);
       if (!endsWithSegmentNumber(interest.name)) {
         interest.name.appendSegment(0);
@@ -39,8 +43,20 @@ var ndnPutFile = function (file, name) {
       } catch (e) {
         console.log(e.toString());
       }
-    }
-  var face = new Face({host: location.host.split(':')[0]})
-  face.registerPrefix(name, onInterest)
- 
+    };
+    function sendWriteCommand() {
+      var onTimeout = function (interest) {
+        console.log("timeout", interest);
+      };
+      destination.expressInterest(name.append(commandMarkers.startWrite), null, onTimeout);
+      console.log("did this time correctly?")
+    }; 
+    console.log(name, destination)
+    destination.registerPrefix(new Name(name.toUri()), onInterest)
+    setTimeout(sendWriteCommand, 5000)
+    
+  } else if (destination instanceof ndnr) {//we're putting directly into ndnr
+  
+  
+  };
 };

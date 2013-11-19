@@ -198,13 +198,13 @@ ndnr.prototype.put = function (data, name) {
 
 ndnr.prototype.onInterest = function (prefix, interest, transport) {
   //NOT WORKING
-  console.log("onInterest called for incoming interest: ", interest);
+  console.log("onInterest called for incoming interest: ", interest, transport);
   
   if (nameHasCommandMarker(interest.name)) {
     console.log(interest.name, 'HAS COMMAND MARKER')
     command = getCommandMarker(interest.name);
     console.log(command);
-    ndnr.prototype.executeCommand(interest, command);
+    repo.executeCommand(interest, command); //THIS IS AN UNFORGIVABLE HACK >.< MUST FIND BETTER SOLUTION
     return;
   };
 
@@ -286,14 +286,15 @@ ndnr.prototype.getContent = function(name) {
   
   
   
-  
+  console.log(name.toUri())
   this.face.expressInterest(name, onData, onTimeout);
 };
 
 ndnr.prototype.executeCommand = function (interest, command) {
   if (command == '%C1.META') {
-    console.log(getNameWithoutCommandMarker(interest.name))
-    this.getContent()
+    var name = getNameWithoutCommandMarker(interest.name);
+    console.log(name)
+    this.getContent(name)
   };
 
 };

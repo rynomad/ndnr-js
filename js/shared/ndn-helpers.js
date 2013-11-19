@@ -1,3 +1,24 @@
+function fileToSegmentArray(file) {
+  var chunkSize = 7000;
+  var fileSize = (file.size - 1);
+  var ndnArray = []
+  var loaded = function(e){
+      ndnArray.push( new Buffer(e.target.result));
+      console.log(i, file)
+  };
+
+  for(var i =0; i < fileSize; i += chunkSize) {
+      (function( fil, start ) {
+          var reader = new FileReader();
+          var blob = fil.slice(start, chunkSize + start);
+          reader.onload = loaded;
+          reader.readAsDataURL(blob);
+      })( file, i );
+     
+  };
+
+};
+
 function chunkArbitraryData(data, name) {
   var ndnArray = [];
 
