@@ -169,7 +169,7 @@ ndnr.prototype.makeLeafandBranches = function (name, callback) {
 };
 
 
-ndnr.prototype.put = function (data, name) {
+ndnr.prototype.put = function (name, data, callback) {
   //ALMOST WORKING
   var hook = this;
   var ndnArray = chunkArbitraryData(data, name);
@@ -185,7 +185,7 @@ ndnr.prototype.put = function (data, name) {
   console.log(this.db.objectStoreNames, uri)
   if (this.db.objectStoreNames.contains(uri)) {
     for (i = 0; i < ndnArray.length; i++) {
-      console.log('adding data', uri, ndnArray[i])
+      //console.log('adding data', uri, ndnArray[i])
       
       this.db.transaction([uri], "readwrite").objectStore(uri).put(ndnArray[i], i);
     };
@@ -220,21 +220,21 @@ ndnr.prototype.onInterest = function (prefix, interest, transport) {
   var Request = window.indexedDB.open(prefix.toUri());
   Request.onsuccess = function (event) {
     var db = Request.result;
-    console.log('got heres', db.objectStoreNames,  objectStoreName)
+    //console.log('got heres', db.objectStoreNames,  objectStoreName)
     if (db.objectStoreNames.contains(objectStoreName)) {
-      console.log('got heres')
+      //console.log('got heres')
       var objectStore = db.transaction([objectStoreName]).objectStore(objectStoreName)
       var getFinalSegment = objectStore.count();
       getFinalSegment.onsuccess = function (event) {
-        console.log('got heres')
+        //console.log('got heres')
         var getBuffer = objectStore.get(requestedSegment);
         getBuffer.onsuccess = function (e) {
-          console.log(getBuffer.result, interest);
+          //console.log(getBuffer.result, interest);
           var data = new Data(interest.name, new SignedInfo(), getBuffer.result);
           data.signedInfo.setFields();
           data.signedInfo.finalBlockID = initSegment(getFinalSegment.result - 1);
           data.sign();
-          console.log(data);
+          //console.log(data);
           var encodedData = data.encode();
           transport.send(encodedData)
         }; 
@@ -246,9 +246,9 @@ ndnr.prototype.onInterest = function (prefix, interest, transport) {
 
 ndnr.prototype.getContent = function(name) {
   var hook = this;
-  console.log(hook);
+  //console.log(hook);
   var objectStoreName = normalizeUri(name)[0].toUri();
-  console.log(objectStoreName)
+  //console.log(objectStoreName)
   //if (this.db.objectStoreNames.contains(objectStoreName)) {
     //Start Getting and putting segments
     var onData = function (interest, co) {
@@ -263,7 +263,7 @@ ndnr.prototype.getContent = function(name) {
           if (isLastSegment(co.name, co)) {  
           console.log('got last segment')
         } else {
-          console.log(name, co)
+          //console.log(name, co)
           newName = name.getPrefix(name.components.length - 1).appendSegment(segmentNumber + 1);
           console.log(newName)
           hook.face.expressInterest(newName, onData, onTimeout);

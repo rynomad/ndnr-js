@@ -4,7 +4,6 @@ function fileToSegmentArray(file) {
   var ndnArray = []
   var loaded = function(e){
       ndnArray.push( new Buffer(e.target.result));
-      console.log(i, file)
   };
 
   for(var i =0; i < fileSize; i += chunkSize) {
@@ -27,13 +26,12 @@ function chunkArbitraryData(data, name) {
   } else if (typeof data == 'string') {
     var string = data;
   } else if (typeof data == 'file') {
-    console.log('no handlers yet for datatype: ', typeof data);
+    //console.log('no handlers yet for datatype: ', typeof data);
     return;
   };
 
   var stringArray = string.match(/.{1,4000}/g);
   var segmentNames = [];
-  console.log(stringArray.length)
   for (i = 0; i < stringArray.length; i++) {
     ndnArray[i] = stringArray[i]
     ndnArray[i] = new Buffer(stringArray[i]);
@@ -66,14 +64,13 @@ function getAllPrefixes(name) {
 };
 
 function isFirstSegment(name) {
-    console.log('first?', name.components[name.components.length - 1].value[0]);
     return name.components != null && name.components.length >= 1 &&
         name.components[name.components.length - 1].value.length == 1 &&
         name.components[name.components.length - 1].value[0] == 0;
 };
 
 function isLastSegment(name, co) {
-    console.log(name.components[name.components.length - 1],co.signedInfo.finalBlockID)
+   
     return DataUtils.arraysEqual(name.components[name.components.length - 1].value, co.signedInfo.finalBlockID);
 }
 
@@ -85,13 +82,10 @@ function normalizeUri(name) {
   } else if (!isFirstSegment(name)) {
     normalizedName = name.getPrefix(name.components.length - 1).appendSegment(0);
     requestedSegment = DataUtils.bigEndianToUnsignedInt(name.components[name.components.length - 1].value);
-    console.log('ends with segment number but not first', DataUtils.bigEndianToUnsignedInt(name.components[name.components.length - 1].value))
   } else {
     normalizedName = name;
     requestedSegment = 0;
-    console.log(isFirstSegment(name))
   };
-  console.log('requestedSegment', requestedSegment)
   var returns = [normalizedName, requestedSegment];
   return returns
 };
@@ -99,7 +93,6 @@ function normalizeUri(name) {
 
 
 function endsWithSegmentNumber(name) {
-  console.log(name)
     return name.components != null && name.components.length >= 1 &&
         name.components[name.components.length - 1].value.length >= 1 &&
         name.components[name.components.length - 1].value[0] == 0;
