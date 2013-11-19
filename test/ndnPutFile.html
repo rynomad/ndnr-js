@@ -1,0 +1,18 @@
+<html>
+<head>
+<script src="../js/ndn-js/ndn.js" type="text/javascript"></script>
+<script src="../js/shared/ndn-helpers.js" type="text/javascript"></script>
+<script src="../js/ndnputfile.js" type="text/javascript"></script>
+
+</head>
+<body>
+<script>
+
+var face = new Face({host: 'localhost'});
+
+
+</script>
+
+<input id="image-file" type="file" onchange="ndnputfile(new Name(this.files[0].name), this.files[0], face)" />
+</body>
+</html>
