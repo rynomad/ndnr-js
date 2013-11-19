@@ -18,7 +18,7 @@ function b64toBlob(b64Data, contentType, sliceSize) {
 
     for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
         var slice = byteCharacters.slice(offset, offset + sliceSize);
-
+        console.log(offset)
         var byteNumbers = new Array(slice.length);
         for (var i = 0; i < slice.length; i++) {
             byteNumbers[i] = slice.charCodeAt(i);
@@ -42,19 +42,16 @@ var onData = function (interest, co) {
     segmentNumber = DataUtils.bigEndianToUnsignedInt
       (co.name.components[co.name.components.length - 1].value);
     
-    contentArray.push(co.content)
+    contentArray.push(co.content.toString())
     console.log("added segment Number ", segmentNumber);
     if (isLastSegment(co.name, co)) {  
-      console.log('got last segment')
-      var fullcontent = '';
-      for (i = 0; i < contentArray.length; i++) {
-        fullcontent += contentArray[i].toString()
-      };
-      var dataurl = fullcontent
-      console.log(dataurl);
+      console.log('got last segment', contentArray.length)
+      var fullcontent = [];
+      var dataurl = contentArray.join('')
+     
       var b64data = dataurl.split(',')[1];
       var mime = dataurl.split(',')[0].split(':')[1].split(';')[0]
-      console.log(b64data, mime)
+      
       var blob = b64toBlob(b64data, mime);
       var blobUrl = URL.createObjectURL(blob);
       //var blobUri = URL.createObjectURL(blob);
@@ -67,7 +64,7 @@ var onData = function (interest, co) {
     } else {
       //console.log(name, co)
       newName = named.getPrefix(named.components.length).appendSegment(segmentNumber + 1);
-      console.log(newName)
+      //console.log(newName)
       face.expressInterest(newName, onData, onTimeout);
     };
    

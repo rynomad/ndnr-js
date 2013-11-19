@@ -7,11 +7,13 @@ var ndnPutFile = function (name, file, destination, callback) {
   console.log(fileSize)
   var ndnArray = []
   var loaded = function(e){
-      var string = e.target.result
+      var string = e.target.result;
       for(var i =0; i < string.length; i += chunkSize) {
         var chunk = string.slice(i, chunkSize + i);
+        
         ndnArray.push(new Buffer(chunk));
       };
+      console.log(string.length/chunkSize);
   };
   var reader = new FileReader();
   reader.onload = loaded;
