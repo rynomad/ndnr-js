@@ -39,8 +39,9 @@ var ndnr = function (prefix) {
 
 ndnr.prototype.setFace = function(prefix) {
   var hook = this;
-  this.face = new Face({host: location.host.split(':')[0], port: 9696});
-  this.face.registerPrefix(new Name(prefix), this.onInterest)
+  this.onInterest.hook = this;
+  hook.face = new Face({host: location.host.split(':')[0], port: 9696})
+  hook.face.registerPrefix(new Name(prefix), hook.onInterest)
 };
 
 ndnr.prototype.setDb = function(db) {
@@ -191,7 +192,7 @@ ndnr.prototype.put = function (name, data, callback) {
     };
   } else {
     hook.put.data = data;
-    console.log(hook)
+    //console.log(hook)
     hook.makeLeafandBranches(name, hook.put);
   };
 };
@@ -203,8 +204,8 @@ ndnr.prototype.onInterest = function (prefix, interest, transport) {
   if (nameHasCommandMarker(interest.name)) {
     console.log(interest.name, 'HAS COMMAND MARKER')
     command = getCommandMarker(interest.name);
-    console.log(command);
-    repo.executeCommand(interest, command); //THIS IS AN UNFORGIVABLE HACK >.< MUST FIND BETTER SOLUTION
+    console.log(this);
+    this.onInterest.hook.executeCommand(interest, command); //THIS IS AN UNFORGIVABLE HACK >.< MUST FIND BETTER SOLUTION
     return;
   };
 
@@ -293,7 +294,7 @@ ndnr.prototype.getContent = function(name) {
 ndnr.prototype.executeCommand = function (interest, command) {
   if (command == '%C1.META') {
     var name = getNameWithoutCommandMarker(interest.name);
-    console.log(name)
+    console.log(this)
     this.getContent(name)
   };
 
