@@ -1,3 +1,29 @@
+function b64toBlob(b64Data, contentType, sliceSize) {
+    contentType = contentType || '';
+    sliceSize = sliceSize || 512;
+    console.log(contentType)
+    var byteCharacters = atob(b64Data);
+    var byteArrays = [];
+
+    for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+        var slice = byteCharacters.slice(offset, offset + sliceSize);
+        console.log(offset)
+        var byteNumbers = new Array(slice.length);
+        for (var i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+        }
+
+        var byteArray = new Uint8Array(byteNumbers);
+
+        byteArrays.push(byteArray);
+    }
+
+    var blob = new Blob(byteArrays, {type: contentType});
+    return blob;
+}
+
+
+
 function fileToSegmentArray(file) {
   var chunkSize = 7000;
   var fileSize = (file.size - 1);
@@ -18,7 +44,7 @@ function fileToSegmentArray(file) {
 
 };
 
-function chunkArbitraryData(data, name) {
+function chunkArbitraryData(name, data) {
   var ndnArray = [];
 
   if (typeof data == 'object') {
@@ -77,17 +103,17 @@ function isLastSegment(name, co) {
 
 function normalizeUri(name) {
   if (!endsWithSegmentNumber(name)) {
-    normalizedName = name.appendSegment(0);
+    normalizedName = name;
     requestedSegment = 0
   } else if (!isFirstSegment(name)) {
-    normalizedName = name.getPrefix(name.components.length - 1).appendSegment(0);
+    normalizedName = name.getPrefix(name.components.length - 1);
     requestedSegment = DataUtils.bigEndianToUnsignedInt(name.components[name.components.length - 1].value);
   } else {
-    normalizedName = name;
+    normalizedName = name.getPrefix(name, name.components.length - 1) ;
     requestedSegment = 0;
   };
   var returns = [normalizedName, requestedSegment];
-  return returns
+  return returns;
 };
 
 
@@ -137,7 +163,9 @@ function getNameWithoutCommandMarker(name) {
   }
   return strippedName;
 };
-
+function getSuffix(name, p) {
+    return new Name(name.components.slice(p));
+};
 
 var commandMarkers = {}
 

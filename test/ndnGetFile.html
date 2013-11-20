@@ -2,85 +2,15 @@
 <head>
 <script src="../js/ndn-js/ndn.js" type="text/javascript"></script>
 <script src="../js/shared/ndn-helpers.js" type="text/javascript"></script>
+<script src="../js/ndngetfile.js" type="text/javascript"></script>
+<script src="../js/ndnr.js" type="text/javascript"></script>
 
 </head>
 <body>
 
-<a href='' download></a>
 <script>
 
-function b64toBlob(b64Data, contentType, sliceSize) {
-    contentType = contentType || '';
-    sliceSize = sliceSize || 512;
-    console.log(contentType)
-    var byteCharacters = atob(b64Data);
-    var byteArrays = [];
-
-    for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-        var slice = byteCharacters.slice(offset, offset + sliceSize);
-        console.log(offset)
-        var byteNumbers = new Array(slice.length);
-        for (var i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
-        }
-
-        var byteArray = new Uint8Array(byteNumbers);
-
-        byteArrays.push(byteArray);
-    }
-
-    var blob = new Blob(byteArrays, {type: contentType});
-    return blob;
-}
-
-var face = new Face({host: 'localhost'})
-var contentArray = []
-var onData = function (interest, co) {
-  var returns = normalizeUri(interest.name)
-  var segmentNumber = returns[1]
-  if (endsWithSegmentNumber(co.name)) {
-    segmentNumber = DataUtils.bigEndianToUnsignedInt
-      (co.name.components[co.name.components.length - 1].value);
-    
-    contentArray.push(co.content.toString())
-    console.log("added segment Number ", segmentNumber);
-    if (isLastSegment(co.name, co)) {  
-      console.log('got last segment', contentArray.length)
-      var fullcontent = [];
-      var dataurl = contentArray.join('')
-     
-      var b64data = dataurl.split(',')[1];
-      var mime = dataurl.split(',')[0].split(':')[1].split(';')[0]
-      
-      var blob = b64toBlob(b64data, mime);
-      var blobUrl = URL.createObjectURL(blob);
-      //var blobUri = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      //alert(a.download === ''); // If true, this seems to indicate support
-      a.setAttribute('download', named.toUri());
-      a.href = blobUrl;
-      a.innerHTML = 'testing';
-      document.body.appendChild(a);
-    } else {
-      //console.log(name, co)
-      newName = named.getPrefix(named.components.length).appendSegment(segmentNumber + 1);
-      //console.log(newName)
-      face.expressInterest(newName, onData, onTimeout);
-    };
-   
-    
-  }
-};
-
-
-var onTimeout = function (interest) {
-  console.log("timeout");
-};
-
-  
-  
-  console.log(name)
-  face.expressInterest(name, onData, onTimeout);
+//var repo = new ndnr('some/arbitrary/prefix');
 
 </script>
 </body>

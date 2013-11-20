@@ -57,6 +57,6 @@ var ndnPutFile = function (name, file, destination, callback) {
     
   } else if (destination instanceof ndnr) {//we're putting directly into ndnr
   
-    destination.put
+    destination.put( name, ndnArray)
   };
 };
