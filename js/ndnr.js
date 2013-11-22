@@ -10,38 +10,29 @@ console.log('ndnr.js loading')
  * Database constructor
  * @prefix: application prefix (used as database name) STRING
  */
-var ndnr = function (prefix) {
+var ndnr = function (prefix, faceParam) {
 
-  if(!indexedDBOk) return;  // No IndexedDB support
-   
-  var hook = this;          // "this" will not work within IDB transaction callbacks, so tie it to a new variable
-  var prefixUri = (new Name(prefix)).toUri()
-  openRequest = indexedDB.open(prefixUri);
-  openRequest.onupgradeneeded = function(e) { // since this constructor doesn't specify a version, this should only be called on first init
-    hook.setDb(e.target.result);
-    hook.makeTree(new Name(''))
-  };
-
-  openRequest.onsuccess = function(e) {
-    if (!hook.db) {hook.setDb(e.target.result)};
-    
-    hook.setFace(prefixUri);
-  };
-
-  openRequest.onerror = function(e) {
-    console.log('error opening database: ', e);
-  };
+  if(!indexedDBOk) return console.log('no indexedDb');  // No IndexedDB support
+  var prefixUri = (new Name(prefix)).toUri(),           // normalize 
+      initDb = {};           
+  
+  this.prefix = prefixUri
   
   
-  //Set up Face
+  if (faceParam) {
+    this.interestHandler.face = new Face(faceParam)
+  } else {
+    this.interestHandler.face = new Face({host: location.host.split(':')[0]})
+  };
   
-};
+  this.interestHandler.face.registerPrefix(new Name(prefix), this.interestHandler);
+  
+  initDb.onupgradeneeded = function(e) {
+    console.log("Version 1 of database ", prefixUri, "created");
+  };
 
-ndnr.prototype.setFace = function(prefix) {
-  var hook = this;
-  this.onInterest.hook = this;
-  hook.face = new Face({host: location.host.split(':')[0], port: 9696})
-  hook.face.registerPrefix(new Name(prefix), hook.onInterest)
+  useIndexedDB(prefixUri, initDb);
+
 };
 
 ndnr.prototype.setDb = function(db) {
@@ -134,16 +125,20 @@ ndnr.prototype.makeLeafandBranches = function (name, callback) {
   var normalized;
   var hook = this;
   hook.callback = callback;
-  console.log(name);
-
+  ndnName = new Name(name)
+  if (name.hasVersion == true) {
+    alert('this is beyond insanity', name.hasVersion)
+  } else {
+    alert('also kinda nuts')
+  };
   var newVersion = this.db.version + 1;
 
-  if (!endsWithSegmentNumber(name)) {
-    normalized = name.appendSegment(0)
-  } else if (!isFirstSegment(name)) {
-    normalized = name.getPrefix(name.components.length - 1).appendSegment(0)
+  if (!endsWithSegmentNumber(ndnName)) {
+    normalized = ndnName.appendSegment(0)
+  } else if (!isFirstSegment(ndnName)) {
+    normalized = ndnName.getPrefix(ndnName.components.length - 1).appendSegment(0)
   } else {
-    normalized = name;
+    normalized = ndnName;
   };
   hook.evaluateNameTree(normalized);
   console.log(normalized, name, hook.db);
@@ -159,8 +154,8 @@ ndnr.prototype.makeLeafandBranches = function (name, callback) {
   upgradeRequest.onsuccess = function (event) {
     console.log('added leaf node', this);
     if (callback) {
-      //console.log(callback);
-      hook.callback( name, callback.data);
+      console.log(callback.data);
+      hook.callback( ndnName, callback.data);
     };
    
   };
@@ -174,6 +169,7 @@ ndnr.prototype.makeLeafandBranches = function (name, callback) {
 ndnr.prototype.put = function (name, data, callback) {
   //ALMOST WORKING
   var hook = this;
+  hook.put.callback = callback;
   if (data instanceof File) {         // called with the Filereader API
     return ndnPutFile(name, data, this);
   } else if (data instanceof Array) { // Assume we're passing a preformatted Array
@@ -183,84 +179,79 @@ ndnr.prototype.put = function (name, data, callback) {
     var ndnArray = chunkArbitraryData(name, data);
   };
   
-  //console.log(name, data);
-  if (endsWithSegmentNumber(name)) {
-    var pathNameWithoutSegment = name.getPrefix(name.components.length - 1);
-    var uri = pathNameWithoutSegment.addSegment(0).toUri();
+  var ndnName = new Name(name)
+  if (name.hasVersion == undefined ) {
+    alert('not evaluating false here?')
+    var uri = appendVersion(normalizeUri(ndnName)[0]).appendSegment(0).toUri();
+    uri.hasVersion = true;
   } else {
-    var uri = name.addSegment(0).toUri(); 
+    var uri = name
   };
   
-  
-  //console.log(this, uri)
+  this.makeLeafandBranches(uri, hook.put);
+    console.log(this, uri)
   if (this.db.objectStoreNames.contains(uri)) {
     for (i = 0; i < ndnArray.length; i++) {
       console.log('adding data', i, "of ", ndnArray.length)
+      var action = this.db.transaction([uri], "readwrite").objectStore(uri).put(ndnArray[i], i);
+      if (i + 1 == ndnArray.length) {
+        action.onsuccess = function (e) {
+          console.log(normalizeUri(ndnName)[0])
+          hook.put.callback(normalizeUri(ndnName)[0])
+        };
+      }; 
       
-      this.db.transaction([uri], "readwrite").objectStore(uri).put(ndnArray[i], i);
     };
-  } else {
-    hook.put.data = data;
-    //console.log(hook)
-    hook.makeLeafandBranches(name, hook.put);
   };
 };
 
-ndnr.prototype.onInterest = function (prefix, interest, transport) {
-  //NOT WORKING
-  console.log("onInterest called for incoming interest: ", interest, transport);
-  
-  if (nameHasCommandMarker(interest.name)) {
-    console.log(interest.name, 'HAS COMMAND MARKER')
-    command = getCommandMarker(interest.name);
-    console.log(this);
-    this.onInterest.hook.executeCommand(interest, command); 
-    return;
-  };
+// vvvv THIS IS THE GOOD STUFF vvvv Plus NDN-helpers. NEED to Refactor and streamline useIndexedDB a little but it seems to be working good
 
-  //console.log(interest.name);
-  var returned = normalizeUri(getSuffix(interest.name, prefix.components.length))
-  var normalizedName, requestedSegment;
-  normalizedName = returned[0];
-  requestedSegment = returned[1];
-  var objectStoreName = new Name(normalizedName).appendSegment(0).toUri()
+ndnr.prototype.interestHandler = function(prefix, interest, transport) {
+  console.log("onInterest called for incoming interest: ", interest);
+  console.log(this)    
+  if (nameHasCommandMarker(interest.name)) {
+    var command = getCommandMarker(interest.name);
+    console.log('incoming interest has command marker ', command);
+    executeCommand(prefix, interest, command); 
+    return;
+  } else {
+    console.log('attempting to fulfill interest');
+    fulfillInterest(prefix, interest, transport);
+  };
+};
+
+function fulfillInterest(prefix, interest, transport) {
+  var localName = getSuffix(interest.name, prefix.components.length )
+      objectStoreName = normalizeNameToObjectStore(localName),
+      thisSegment = getSegmentInteger(localName),
+      dbName = prefix.toUri(),
+      getContent = {};
+      
   
-  console.log(objectStoreName, requestedSegment);
-  
-  var Request = window.indexedDB.open(prefix.toUri());
-  Request.onsuccess = function (event) {
-    var db = Request.result;
-    console.log('got heres', db.objectStoreNames,  objectStoreName)
-    if (db.objectStoreNames.contains(objectStoreName)) {
-      console.log('got heres')
-      var objectStore = db.transaction([objectStoreName]).objectStore(objectStoreName)
-      var getFinalSegment = objectStore.count();
-      getFinalSegment.onsuccess = function (event) {
-        console.log('got heres')
-        var getBuffer = objectStore.get(requestedSegment);
-        getBuffer.onsuccess = function (e) {
-          console.log(getBuffer.result, interest);
-          var data = new Data((new Name(prefix)).append(normalizedName.appendSegment(requestedSegment)), new SignedInfo(), getBuffer.result);
-          data.signedInfo.setFields();
-          data.signedInfo.finalBlockID = initSegment(getFinalSegment.result - 1);
-          data.sign();
-          console.log(data);
-          var encodedData = data.encode();
-          transport.send(encodedData)
-        }; 
+  getContent.onsuccess = function(e) {
+    e.target.result.onversionchange = function(e){
+      console.log('version change requested, closing db');
+      e.target.close();
+    };
+    if (e.target.result.objectStoreNames.contains(objectStoreName)) {
+      e.target.result.transaction(objectStoreName).objectStore(objectStoreName).get(thisSegment).onsuccess = function(e) {
+          transport.send(e.target.result)
       };
     };
-  };
+  }; 
   
+  useIndexedDB(dbName, getContent);
 };
 
 ndnr.prototype.getContent = function(name) {
   var hook = this;
-  console.log(hook);
+  console.log(name);
   var objectStoreName = normalizeUri(name)[0].appendSegment(0).toUri();
   console.log(objectStoreName)
   if (this.db.objectStoreNames.contains(objectStoreName)) {
     //Start Getting and putting segments
+    console.log('here')
     var onData = function (interest, co) {
       var returns = normalizeUri(interest.name)
       var segmentNumber = returns[1]
@@ -331,44 +322,63 @@ ndnr.prototype.get = function (name, callback) {
 
 };
 
-ndnr.prototype.executeCommand = function (interest, command) {
-  if (command == '%C1.META') {
-    var name = getNameWithoutCommandMarker(interest.name);
-    console.log(this)
-    this.getContent(name)
+function executeCommand(prefix, interest, command) {
+  if (command in commandMarkers) {
+    console.log("executing recognized command ", command);
+    commandMarkers[command](prefix, interest); 
+  } else {
+    console.log("ignoring unrecognized command ", command);
   };
-
 };
 
-
-ndnr.prototype.dataBaseRequest = function (dbName, version) {
-  var hook = this;
+function useIndexedDB(dbName, action, version) {
+  var request;
   
+  if (version) {
+    request = indexedDB.open(dbName, version);
+  } else {
+    request = indexedDB.open(dbName);
+  };
   
-  var Request = window.indexedDB.open(this.db.name, newVersion)
-  Request.onupgradeneeded = function (event) {
-    hook.setDb(event.target.result);
-    if(!event.target.result.objectStoreNames.contains(normalized.toUri())) {
-      event.target.result.createObjectStore(normalized.toUri())
+  ;
+  
+  if (action.onupgradeneeded) {
+    request.onupgradeneeded = action.onupgradeneeded;
+  } else {
+    request.onupgradeneeded = function(e) {
+      console.log('upgrading database to version ', e.target.result.version)
     };
   };
-  
-  Request.onsuccess = function (event) {
-    console.log('added leaf node');
-    hook.evaluateNameTree(name);
-    if (callback) {
-      console.log(callback);
-      hook.put( name, callback.data);
+  if (action.onsuccess) {
+    request.onsuccess = action.onsuccess;
+  } else {
+    request.onsuccess = function(e) { 
+      request.result.onversionchange = function(e){
+        console.log('version change requested, closing db');
+        request.result.close();
+      }
+      console.log("database ", dbName, " is open at version ", e.target.result.version)
     };
-   
   };
-  
-  Request.onblocked = function (event){
-    console.log('request blocked: ', event );
+  if (action.onerror) {
+    request.onerror = action.onerror;
+  } else {
+    request.onerror = function(e) {
+      console.log('error: ', e);
+    };
   };
-
+  if (action.onclose) {
+    request.onclose = action.onclose;
+  } else {
+    request.onclose = function(e) {
+      console.log("database ", dbName, " is closed at version ", e.target.result.version)
+    };
+  };
+  if (action.onblocked) {
+    request.onblocked = action.onblocked;
+  } else {
+    request.onblocked = function(e) {
+      console.log("request blocked: ", e);
+    };
+  };
 };
-
-
-
-

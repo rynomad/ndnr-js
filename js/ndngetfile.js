@@ -54,16 +54,12 @@ var ndnGetFile = function (name, source, callback) {
 
 };
 
-function byteArraysToBlob(byteArrays, mime) {
+function byteArraysToBlobUrl(byteArrays, mime) {
   var blob = new Blob(byteArrays, {type: mime}) 
 
   var blobUrl = URL.createObjectURL(blob);
 
-  var a = document.createElement('a');
-  a.setAttribute('download', mime);
-  a.href = blobUrl;
-  a.innerHTML = 'testing';
-  document.body.appendChild(a)
+  return blobUrl;
 };
 
 
