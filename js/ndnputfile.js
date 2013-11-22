@@ -4,25 +4,64 @@ var ndnPutFile = function (name, file, destination, callback) {
   //start by organizing the data into an array of ndn buffer segments
   var chunkSize = 7000;
   var fileSize = (file.size - 1);
-  console.log(fileSize)
+  var objectStoreName = (new Name(normalizeUri(name)[0].toUri())).appendSegment(0).toUri()
+  console.log(objectStoreName)
   var ndnArray = []
-  var loaded = function(e){
-      var string = e.target.result;
-      for(var i =0; i < string.length; i += chunkSize) {
-        var chunk = string.slice(i, chunkSize + i);
+  
+  function sliceMe(file) {
+    var fr = new FileReader,
+        chunkSize = 7000,
+        chunks = Math.ceil(file.size / chunkSize),
         
-        ndnArray.push(new Buffer(chunk));
-      };
-      console.log(string.length/chunkSize);
-  };
-  var reader = new FileReader();
-  reader.onload = loaded;
-  reader.readAsDataURL(file);
+        chunk = 0;
+        
+        console.log(chunks)
+    
+    
+    function loadNext() {
+       var start, end,
+           blobSlice = File.prototype.mozSlice || File.prototype.webkitSlice;
 
+       start = chunk * chunkSize;
+       end = start + chunkSize >= file.size ? file.size : start + chunkSize;
+
+       fr.onloadend = function(e) {      
+        var buff = new Buffer(e.target.result),
+            store = destination.db.transaction(objectStoreName, 'readwrite').objectStore(objectStoreName);
+          if (++chunk < chunks) {
+            
+            if (destination instanceof ndnr) {
+              
+              store.put( buff, chunk - 1).onsuccess = function (e) {
+                console.log(chunk)
+                loadNext();
+              };
+            };
+          } else {
+            if (destination instanceof ndnr) {
+              store.put( buff, chunk - 1).onsuccess = function (e) {
+                console.log('last chunk, ', chunk)
+              };
+            };
+          
+          
+          };
+       };
+       var blob = file.slice(start,end);
+       //console.log(blob)
+       fr.readAsArrayBuffer(blob, (end - start));
+    }
+    
+      loadNext();
+
+    
+}
+
+sliceMe(file)
   
 
 
-  if (destination instanceof Face) { //we're putting a file to an ndnr over the network
+/*  if (destination instanceof Face) { //we're putting a file to an ndnr over the network
     function onInterest(prefix, interest, transport) {
       //console.log("onInterest called.", interest.name.components.length, ndnArray[ndnArray.length - 1]);
       if (!endsWithSegmentNumber(interest.name)) {
@@ -56,7 +95,7 @@ var ndnPutFile = function (name, file, destination, callback) {
     setTimeout(sendWriteCommand, 5000)
     
   } else if (destination instanceof ndnr) {//we're putting directly into ndnr
-  
+    console.log(destination)
     destination.put( name, ndnArray)
-  };
+  }; */
 };

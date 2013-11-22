@@ -102,6 +102,7 @@ function isLastSegment(name, co) {
 
 
 function normalizeUri(name) {
+  //console.log(name)
   if (!endsWithSegmentNumber(name)) {
     normalizedName = name;
     requestedSegment = 0

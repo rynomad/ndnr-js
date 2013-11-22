@@ -133,6 +133,7 @@ ndnr.prototype.populateBranches = function (name) {
 ndnr.prototype.makeLeafandBranches = function (name, callback) {
   var normalized;
   var hook = this;
+  hook.callback = callback;
   console.log(name);
 
   var newVersion = this.db.version + 1;
@@ -156,10 +157,10 @@ ndnr.prototype.makeLeafandBranches = function (name, callback) {
   };
   
   upgradeRequest.onsuccess = function (event) {
-    console.log('added leaf node');
+    console.log('added leaf node', this);
     if (callback) {
-      console.log(callback);
-      hook.put( name, callback.data);
+      //console.log(callback);
+      hook.callback( name, callback.data);
     };
    
   };
@@ -178,10 +179,11 @@ ndnr.prototype.put = function (name, data, callback) {
   } else if (data instanceof Array) { // Assume we're passing a preformatted Array
     var ndnArray = data;
   } else {                            // anything else
+    //console.log(data)
     var ndnArray = chunkArbitraryData(name, data);
   };
   
-  console.log(name, data);
+  //console.log(name, data);
   if (endsWithSegmentNumber(name)) {
     var pathNameWithoutSegment = name.getPrefix(name.components.length - 1);
     var uri = pathNameWithoutSegment.addSegment(0).toUri();
@@ -190,16 +192,16 @@ ndnr.prototype.put = function (name, data, callback) {
   };
   
   
-  console.log(this.db.objectStoreNames, uri)
+  //console.log(this, uri)
   if (this.db.objectStoreNames.contains(uri)) {
     for (i = 0; i < ndnArray.length; i++) {
-      console.log('adding data', ndnArray[i])
+      console.log('adding data', i, "of ", ndnArray.length)
       
       this.db.transaction([uri], "readwrite").objectStore(uri).put(ndnArray[i], i);
     };
   } else {
     hook.put.data = data;
-    console.log(hook)
+    //console.log(hook)
     hook.makeLeafandBranches(name, hook.put);
   };
 };
@@ -238,7 +240,7 @@ ndnr.prototype.onInterest = function (prefix, interest, transport) {
         var getBuffer = objectStore.get(requestedSegment);
         getBuffer.onsuccess = function (e) {
           console.log(getBuffer.result, interest);
-          var data = new Data(prefix.append(normalizedName.appendSegment(requestedSegment)), new SignedInfo(), getBuffer.result);
+          var data = new Data((new Name(prefix)).append(normalizedName.appendSegment(requestedSegment)), new SignedInfo(), getBuffer.result);
           data.signedInfo.setFields();
           data.signedInfo.finalBlockID = initSegment(getFinalSegment.result - 1);
           data.sign();
@@ -255,8 +257,8 @@ ndnr.prototype.onInterest = function (prefix, interest, transport) {
 ndnr.prototype.getContent = function(name) {
   var hook = this;
   console.log(hook);
-  var objectStoreName = normalizeUri(name)[0].toUri();
-  //console.log(objectStoreName)
+  var objectStoreName = normalizeUri(name)[0].appendSegment(0).toUri();
+  console.log(objectStoreName)
   if (this.db.objectStoreNames.contains(objectStoreName)) {
     //Start Getting and putting segments
     var onData = function (interest, co) {
@@ -265,6 +267,7 @@ ndnr.prototype.getContent = function(name) {
       if (endsWithSegmentNumber(co.name)) {
         segmentNumber = DataUtils.bigEndianToUnsignedInt
           (co.name.components[co.name.components.length - 1].value);
+        console.log(objectStoreName)
         var objectStore = hook.db.transaction([objectStoreName], "readwrite").objectStore(objectStoreName);
         objectStore.put(co.content, segmentNumber).onsuccess = function (e) {
           console.log("added segment Number ", segmentNumber);
@@ -300,14 +303,14 @@ ndnr.prototype.getContent = function(name) {
 };
 
 ndnr.prototype.get = function (name, callback) {
-  var storeName = normalizeUri(name)[0].toUri()
+  var storeName = normalizeUri(name)[0].appendSegment(0).toUri()
   console.log(storeName)
   var trans = this.db.transaction(storeName);
   var store = trans.objectStore(storeName);
   var items = [];
 
   trans.oncomplete = function(evt) {  
-    console.log(items);
+    byteArraysToBlob(items, 'application/x-deb')
   };
 
   var cursorRequest = store.openCursor();
@@ -319,6 +322,7 @@ ndnr.prototype.get = function (name, callback) {
   cursorRequest.onsuccess = function(evt) {                    
     var cursor = evt.target.result;
     if (cursor) {
+      console.log(cursor)
       items.push(cursor.value);
       cursor.continue();
     }
