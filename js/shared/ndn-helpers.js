@@ -144,7 +144,7 @@ function getCommandMarker(name) {
     if (component.length <= 0)
       continue;
         
-    if (component[0] == 0xC1) {
+    if (component[0] == 0xC1 && component[2] != 0x4E) {
       return name.components[i].toEscapedString()
     };
   }
@@ -187,13 +187,17 @@ function appendVersion(name, date) {
 
 var commandMarkers = {}
 
+
 commandMarkers["%C1.R.sw"] = function startWrite( prefix, interest) {
   var localName = getNameWithoutCommandMarker(getSuffix(interest.name, prefix.components.length)),
       objectStoreName = normalizeNameToObjectStore(localName);
-  this["%C1.R.sw"].component = new Name.Component("%C1.R.sw");
-  console.log("Building objectStore Tree for ", objectStoreName);
-  buildObjectStoreTree(prefix, objectStoreName, recursiveSegmentRequest, this.onInterest.face)
+      
+  
+  console.log("Building objectStore Tree for ", objectStoreName, this);
+  
+  buildObjectStoreTree(prefix, objectStoreName, recursiveSegmentRequest, interest.face);
 };
+commandMarkers["%C1.R.sw"].component = new Name.Component([0xc1, 0x2e, 0x52, 0x2e, 0x73, 0x77]);
 
 function recursiveSegmentRequest(face, prefix, objectStoreName) {
   var dbName = prefix.toUri();
@@ -201,27 +205,26 @@ function recursiveSegmentRequest(face, prefix, objectStoreName) {
       insertSegment = {};
       
       insertSegment.onsuccess = function(e) {
-        e.target.result.onversionchange = function(e){
-          console.log('version change requested, closing db');
-          e.target.close();
-        };
-        var currentSegment = getSegmentInteger(contentObject.name),
-            finalSegment = DataUtils.bigEndianToUnsignedInt(contentObject.signedInfo.finalBlockID);
+        var currentSegment = getSegmentInteger(insertSegment.contentObject.name),
+            finalSegment = DataUtils.bigEndianToUnsignedInt(insertSegment.contentObject.signedInfo.finalBlockID);
             
-        e.target.result.transaction(objectStoreName).objectStore(objectStoreName, "readwrite").put(contentObject.encode(), currentSegment).onsuccess = function(e) {
+        e.target.result.transaction(objectStoreName, "readwrite").objectStore(objectStoreName).put(insertSegment.contentObject.encode(), currentSegment).onsuccess = function(e) {
           console.log("retrieved and stored segment ", currentSegment, " of ", finalSegment  ," into objectStore ", objectStoreName);
-          var newName = firstSegmentName.getPrefix(firstSegmentName.components.length - 1).appendSegment(currentSegment + 1);
-          face.expressInterest(newName, onData, onTimeout)
+          if (currentSegment < finalSegment) {
+            var newName = firstSegmentName.getPrefix(firstSegmentName.components.length - 1).appendSegment(currentSegment + 1);
+            face.expressInterest(newName, onData, onTimeout);
+          };
         };
       };
   
   function onData(interest, contentObject) {
     console.log("onData called in recursiveSegmentRequest: ", contentObject)
+    insertSegment.contentObject = contentObject;
     useIndexedDB(dbName, insertSegment)
   };
   
   function onTimeout(interest) {
-    console.log("Interest Timed out in recursiveSegmentRequest: ", interest);
+    console.log("Interest Timed out in recursiveSegmentRequest: ", interest, new Date());
   };
   
   face.expressInterest(firstSegmentName, onData, onTimeout);
@@ -237,10 +240,6 @@ function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
       newVersion;
  
       evaluate.onsuccess = function(e) {
-        e.target.result.onversionchange = function(e){
-          console.log('version change requested, closing db');
-          e.target.close();
-        };
         for (i = 0 ; i < uriArray.length; i++) {
           if (!e.target.result.objectStoreNames.contains(uriArray[i])) {
             toCreate.push(uriArray[i]);
@@ -267,17 +266,13 @@ function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
       };
       
       growTree.onsuccess = function(e) {
-        e.target.result.onversionchange = function(e){
-          console.log('version change requested, closing db');
-          e.target.close();
-        };
         console.log("database successfully upgraded to version ", e.target.result.version);
         var transaction = e.target.result.transaction(uriArray, "readwrite")
         transaction.oncomplete = function(e) {
           console.log("New Tree successfully populated, now calling onFinished(arg) if applicable")
-          if (onFinished) {
+          if (onFinished == recursiveSegmentRequest) {
             if (arg) {
-              onFinished(arg)
+              onFinished(arg, prefix, objectStoreName)
             } else {
               onFinished()
             };

@@ -1,5 +1,6 @@
 <html>
 <head>
+<script src="testobj.js" type="text/javascript"></script>
 <script src="../js/ndn-js/ndn.js" type="text/javascript"></script>
 <script src="../js/shared/ndn-helpers.js" type="text/javascript"></script>
 <script src="../js/ndnr.js" type="text/javascript"></script>
@@ -9,12 +10,12 @@
 <body>
 <script>
 
-var repo = new ndnr('wiki');
+var repo = new ndnr('');
 
 
 
 
 </script>
-<input id="image-file" type="file" onchange="repo.put(new Name(this.files[0].name), this.files[0])" />
+<input id="image-file" type="file" onchange="ndnPutFile(new Name(this.files[0].name), this.files[0], repo.interestHandler.face)" />
 </body>
 </html>

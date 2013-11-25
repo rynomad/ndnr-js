@@ -208,8 +208,8 @@ ndnr.prototype.put = function (name, data, callback) {
 // vvvv THIS IS THE GOOD STUFF vvvv Plus NDN-helpers. NEED to Refactor and streamline useIndexedDB a little but it seems to be working good
 
 ndnr.prototype.interestHandler = function(prefix, interest, transport) {
-  console.log("onInterest called for incoming interest: ", interest);
-  console.log(this)    
+  console.log("onInterest called for incoming interest: ", interest.toUri());
+  interest.face = this.onInterest.face  
   if (nameHasCommandMarker(interest.name)) {
     var command = getCommandMarker(interest.name);
     console.log('incoming interest has command marker ', command);
@@ -230,14 +230,12 @@ function fulfillInterest(prefix, interest, transport) {
       
   
   getContent.onsuccess = function(e) {
-    e.target.result.onversionchange = function(e){
-      console.log('version change requested, closing db');
-      e.target.close();
-    };
     if (e.target.result.objectStoreNames.contains(objectStoreName)) {
       e.target.result.transaction(objectStoreName).objectStore(objectStoreName).get(thisSegment).onsuccess = function(e) {
           transport.send(e.target.result)
       };
+    } else {
+      console.log("objectStoreName not found: ", objectStoreName);
     };
   }; 
   
@@ -340,8 +338,6 @@ function useIndexedDB(dbName, action, version) {
     request = indexedDB.open(dbName);
   };
   
-  ;
-  
   if (action.onupgradeneeded) {
     request.onupgradeneeded = action.onupgradeneeded;
   } else {
@@ -350,7 +346,13 @@ function useIndexedDB(dbName, action, version) {
     };
   };
   if (action.onsuccess) {
-    request.onsuccess = action.onsuccess;
+    request.onsuccess = function(e) {
+      request.result.onversionchange = function(e){
+        console.log('version change requested, closing db');
+        request.result.close();
+      }
+      action.onsuccess(e);
+    };
   } else {
     request.onsuccess = function(e) { 
       request.result.onversionchange = function(e){
