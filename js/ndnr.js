@@ -35,175 +35,50 @@ var ndnr = function (prefix, faceParam) {
 
 };
 
-ndnr.prototype.setDb = function(db) {
-  this.db = db
-  this.db.onversionchange = function(e) {
-    this.close();
-  };
-  console.log(db, this);
-};
-
-ndnr.prototype.makeTree = function(name) {
-  var normalized;
-  
-  if (endsWithSegmentNumber(name) && name.components.length >= 1) {
-    normalized = name.getPrefix(name.components.length - 1);
-  } else {
-    normalized = name;
-  };
-  
-  this.evaluateNameTree(normalized);
-
-};
-
-ndnr.prototype.evaluateNameTree = function (name) {
-    
-  var toCreate = [];
-  var uriArray = getAllPrefixes(name);
-  for (i = 0 ; i < uriArray.length; i++) {
-    if (!this.db.objectStoreNames.contains(uriArray[i])) {
-      toCreate.push(uriArray[i]);
-    };
-  };
-  if (toCreate.length > 0) {
-    newVersion = this.db.version + 1;
-    this.makeTreeBranches(name, toCreate, newVersion);
-  } else {
-    this.populateBranches(name);
-  };
-};
-
-
-
-ndnr.prototype.makeTreeBranches = function (name, toCreate, newVersion) {
-  var hook = this;
-  
-  //this.db.close();
-  upgradeRequest = window.indexedDB.open(this.db.name, newVersion)
-  upgradeRequest.onupgradeneeded = function (event) {
-    hook.setDb(event.target.result);
-    for (i = toCreate.length - 1 ; i > - 1; i--) {
-      if (toCreate[i].indexOf('/%00') == -1) {
-        hook.db.createObjectStore(toCreate[i], {keyPath: 'escapedString'});
-      } else {
-        hook.db.createObjectStore(toCreate[i]);
-      };
-    };
-  };
-  
-  upgradeRequest.onsuccess = function (event) {
-    hook.populateBranches(name);
-  };
-  
-  upgradeRequest.onblocked = function (event){
-    hook.db.close();
-    hook.evaluateNameTree(name);
-  };
-};
-
-ndnr.prototype.populateBranches = function (name) {
-  var uriArray = getAllPrefixes(name);
-  try {
-    var transaction = this.db.transaction(uriArray, "readwrite");
-    for (i = 0; i < uriArray.length - 1; i++) {
-      var objectStore = transaction.objectStore(uriArray[i]);
-      var entry = {}
-      entry.component = name.get(i);
-      entry.escapedString = entry.component.toEscapedString();
-      objectStore.put(entry);
-    };
-  } catch (ex) {
-    if (ex.code == 8) {  //content store not found
-      this.evaluateNameTree(name);
-    } else {
-      console.log(ex)
-    }
-  };
-};
-
-ndnr.prototype.makeLeafandBranches = function (name, callback) {
-  var normalized;
-  var hook = this;
-  hook.callback = callback;
-  ndnName = new Name(name)
-  if (name.hasVersion == true) {
-    alert('this is beyond insanity', name.hasVersion)
-  } else {
-    alert('also kinda nuts')
-  };
-  var newVersion = this.db.version + 1;
-
-  if (!endsWithSegmentNumber(ndnName)) {
-    normalized = ndnName.appendSegment(0)
-  } else if (!isFirstSegment(ndnName)) {
-    normalized = ndnName.getPrefix(ndnName.components.length - 1).appendSegment(0)
-  } else {
-    normalized = ndnName;
-  };
-  hook.evaluateNameTree(normalized);
-  console.log(normalized, name, hook.db);
-  var upgradeRequest = window.indexedDB.open(this.db.name, newVersion)
-  upgradeRequest.onupgradeneeded = function (event) {
-    console.log('UPGRADE',normalized)
-    hook.setDb(event.target.result);
-    if(!event.target.result.objectStoreNames.contains(normalized.toUri())) {
-      event.target.result.createObjectStore(normalized.toUri())
-    };
-  };
-  
-  upgradeRequest.onsuccess = function (event) {
-    console.log('added leaf node', this);
-    if (callback) {
-      console.log(callback.data);
-      hook.callback( ndnName, callback.data);
-    };
-   
-  };
-  
-  upgradeRequest.onblocked = function (event){
-    hook.db.close();
-  };
-};
-
-
 ndnr.prototype.put = function (name, data, callback) {
   //ALMOST WORKING
-  var hook = this;
-  hook.put.callback = callback;
-  if (data instanceof File) {         // called with the Filereader API
+  var hook = this
+  console.log(this);
+  if (data instanceof File) { // called with the Filereader API
     return ndnPutFile(name, data, this);
   } else if (data instanceof Array) { // Assume we're passing a preformatted Array
     var ndnArray = data;
-  } else {                            // anything else
+  } else { // anything else
     //console.log(data)
-    var ndnArray = chunkArbitraryData(name, data);
+    var ndnArray = chunkArbitraryData(new Name(this.prefix).append(name), data);
   };
   
-  var ndnName = new Name(name)
-  if (name.hasVersion == undefined ) {
-    alert('not evaluating false here?')
-    var uri = appendVersion(normalizeUri(ndnName)[0]).appendSegment(0).toUri();
-    uri.hasVersion = true;
-  } else {
-    var uri = name
-  };
-  
-  this.makeLeafandBranches(uri, hook.put);
-    console.log(this, uri)
-  if (this.db.objectStoreNames.contains(uri)) {
-    for (i = 0; i < ndnArray.length; i++) {
-      console.log('adding data', i, "of ", ndnArray.length)
-      var action = this.db.transaction([uri], "readwrite").objectStore(uri).put(ndnArray[i], i);
-      if (i + 1 == ndnArray.length) {
-        action.onsuccess = function (e) {
-          console.log(normalizeUri(ndnName)[0])
-          hook.put.callback(normalizeUri(ndnName)[0])
-        };
-      }; 
-      
+  var objectStoreName = normalizeNameToObjectStore(name)
+  var putRequest = {};
+  var dbName = this.prefix;
+  this.put.data = ndnArray;
+  putRequest.onupgradeneeded = function (e) {
+    e.target.result.createObjectStore(objectStoreName).onsuccess = function(e) {
+      console.log(e.target.result)
     };
   };
+  putRequest.onsuccess = function (e) {
+    if (e.target.result.objectStoreNames.contains(objectStoreName)) {
+      for (i = 0; i < ndnArray.length; i++) {
+        console.log('adding data', i, "of ", ndnArray.length)
+        var action = e.target.result.transaction([objectStoreName], "readwrite").objectStore(objectStoreName).put(ndnArray[i], i);
+        if (i + 1 == ndnArray.length) {
+          action.onsuccess = function (e) {
+            buildObjectStoreTree(new Name(dbName), objectStoreName);
+            callback(name, hook.interestHandler.face)
+          };
+        };
+      };
+    } else {
+      console.log('need upgrade')
+      useIndexedDB(dbName, putRequest, e.target.result.version + 1)
+      
+    };
+  }; 
+  useIndexedDB(dbName, putRequest)
 };
+
+
 
 // vvvv THIS IS THE GOOD STUFF vvvv Plus NDN-helpers. NEED to Refactor and streamline useIndexedDB a little but it seems to be working good
 
@@ -230,8 +105,10 @@ function fulfillInterest(prefix, interest, transport) {
       
   
   getContent.onsuccess = function(e) {
+    console.log(objectStoreName)
     if (e.target.result.objectStoreNames.contains(objectStoreName)) {
       e.target.result.transaction(objectStoreName).objectStore(objectStoreName).get(thisSegment).onsuccess = function(e) {
+        console.log(e.target.result)
           transport.send(e.target.result)
       };
     } else {
@@ -242,82 +119,115 @@ function fulfillInterest(prefix, interest, transport) {
   useIndexedDB(dbName, getContent);
 };
 
-ndnr.prototype.getContent = function(name) {
-  var hook = this;
-  console.log(name);
-  var objectStoreName = normalizeUri(name)[0].appendSegment(0).toUri();
-  console.log(objectStoreName)
-  if (this.db.objectStoreNames.contains(objectStoreName)) {
-    //Start Getting and putting segments
-    console.log('here')
-    var onData = function (interest, co) {
-      var returns = normalizeUri(interest.name)
-      var segmentNumber = returns[1]
-      if (endsWithSegmentNumber(co.name)) {
-        segmentNumber = DataUtils.bigEndianToUnsignedInt
-          (co.name.components[co.name.components.length - 1].value);
-        console.log(objectStoreName)
-        var objectStore = hook.db.transaction([objectStoreName], "readwrite").objectStore(objectStoreName);
-        objectStore.put(co.content, segmentNumber).onsuccess = function (e) {
-          console.log("added segment Number ", segmentNumber);
-          if (isLastSegment(co.name, co)) {  
-          console.log('got last segment')
-        } else {
-          //console.log(name, co)
-          newName = name.getPrefix(name.components.length - 1).appendSegment(segmentNumber + 1);
-          console.log(newName)
-          hook.face.expressInterest(newName, onData, onTimeout);
-        }
+function recursiveSegmentRequest(face, prefix, objectStoreName) {
+  var dbName = prefix.toUri();
+      firstSegmentName = (new Name(prefix)).append(new Name(objectStoreName));
+      insertSegment = {};
+      
+      insertSegment.onsuccess = function(e) {
+        var currentSegment = getSegmentInteger(insertSegment.contentObject.name),
+            finalSegment = DataUtils.bigEndianToUnsignedInt(insertSegment.contentObject.signedInfo.finalBlockID);
+            
+        e.target.result.transaction(objectStoreName, "readwrite").objectStore(objectStoreName).put(insertSegment.contentObject.encode(), currentSegment).onsuccess = function(e) {
+          console.log("retrieved and stored segment ", currentSegment, " of ", finalSegment  ," into objectStore ", objectStoreName);
+          if (currentSegment < finalSegment) {
+            var newName = firstSegmentName.getPrefix(firstSegmentName.components.length - 1).appendSegment(currentSegment + 1);
+            face.expressInterest(newName, onData, onTimeout);
+          };
         };
-        
-      }
-    };
-    this.face.expressInterest(name, onData, onTimeout);
+      };
   
-  } else {
-    //Upgrade DataBase 
-    this.makeLeafandBranches(name, this.getContent)  
+  function onData(interest, contentObject) {
+    console.log("onData called in recursiveSegmentRequest: ", contentObject)
+    insertSegment.contentObject = contentObject;
+    useIndexedDB(dbName, insertSegment)
   };
   
-
-    var onTimeout = function (interest) {
-      console.log("timeout");
-    };
-    
+  function onTimeout(interest) {
+    console.log("Interest Timed out in recursiveSegmentRequest: ", interest, new Date());
+  };
   
-  
-  
-  console.log(name.toUri())
-  
+  face.expressInterest(firstSegmentName, onData, onTimeout);
 };
 
-ndnr.prototype.get = function (name, callback) {
-  var storeName = normalizeUri(name)[0].appendSegment(0).toUri()
-  console.log(storeName)
-  var trans = this.db.transaction(storeName);
-  var store = trans.objectStore(storeName);
-  var items = [];
-
-  trans.oncomplete = function(evt) {  
-    byteArraysToBlob(items, 'application/x-deb')
-  };
-
-  var cursorRequest = store.openCursor();
-
-  cursorRequest.onerror = function(error) {
-    console.log(error);
-  };
-
-  cursorRequest.onsuccess = function(evt) {                    
-    var cursor = evt.target.result;
-    if (cursor) {
-      console.log(cursor)
-      items.push(cursor.value);
-      cursor.continue();
-    }
-  };
-
-
+function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
+  var dbName = prefix.toUri(),
+      properName = new Name(objectStoreName),
+      uriArray = getAllPrefixes(properName),
+      toCreate = [],
+      evaluate = {},
+      growTree = {},
+      version;
+ 
+      evaluate.onsuccess = function(e) {
+        for (i = 0 ; i < uriArray.length; i++) {
+          if (!e.target.result.objectStoreNames.contains(uriArray[i])) {
+            toCreate.push(uriArray[i]);
+          };
+        };
+        
+        if (toCreate.length > 0) {
+          console.log(toCreate.length, " objectStores need to be created. Attempting to upgrade database");
+          version = e.target.result.version + 1;
+          useIndexedDB(dbName, growTree, version);
+        } else {
+          console.log(toCreate.length, " objectStores need to be created. calling onFinished(arg) if applicable");
+          if (onFinished == recursiveSegmentRequest) {
+            if (arg) {
+              onFinished(arg, prefix, objectStoreName)
+            } else {
+              onFinished()
+            };
+          }
+        };
+        
+      };
+      
+      
+      growTree.onupgradeneeded = function(e) {
+        console.log("growTree.onupgradeneeded fired: creating ", toCreate.length, " new objectStores");
+        for(i = 0; i < toCreate.length; i++) {
+        console.log(toCreate[i], objectStoreName)
+          if (toCreate[i] == objectStoreName) {
+            e.target.result.createObjectStore(toCreate[i])
+            
+          } else {
+            
+            e.target.result.createObjectStore(toCreate[i], {keyPath: "escapedString"});          
+          };
+        };
+      };
+      
+      growTree.onsuccess = function(e) {
+        console.log("database successfully upgraded to version ", e.target.result.version);
+        var transaction = e.target.result.transaction(uriArray, "readwrite")
+        transaction.oncomplete = function(e) {
+          console.log("New Tree successfully populated, now calling onFinished(arg) if applicable")
+          if (onFinished == recursiveSegmentRequest) {
+            if (arg) {
+              onFinished(arg, prefix, objectStoreName)
+            } else {
+              onFinished()
+            };
+          };
+        };
+        
+        uriArray.pop();
+        
+        (function populate(i) {
+          var entry = {};
+          entry.component = properName.components[i];
+          console.log(entry)
+          entry.escapedString = entry.component.toEscapedString();
+          transaction.objectStore(uriArray[i]).put(entry);
+          i++;
+          if (i < uriArray.length) {
+            populate(i);
+          };
+        })(0)
+      };
+      
+  useIndexedDB(dbName, evaluate);
 };
 
 function executeCommand(prefix, interest, command) {

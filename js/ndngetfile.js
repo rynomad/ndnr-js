@@ -12,13 +12,8 @@ var ndnGetFile = function (name, source, callback) {
       console.log("added segment Number ", segmentNumber);
       if (isLastSegment(co.name, co)) {  
         console.log('got last segment', contentArray.length)
-        var fullcontent = [];
-        var dataurl = contentArray.join('')
-       
-        var b64data = dataurl.split(',')[1];
-        var mime = dataurl.split(',')[0].split(':')[1].split(';')[0]
         
-        var blob = b64toBlob(b64data, mime);
+        var blob = new Blob(contentArray, {type: 'image/jpeg'});
         var blobUrl = URL.createObjectURL(blob);
         
         var a = document.createElement('a');

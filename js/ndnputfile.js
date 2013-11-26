@@ -1,3 +1,33 @@
+function ndnPutJson(name, json, destination, callback) {
+  var chunkSize = 7000,
+      fileSize = (JSON.stringify(json).length - 1),
+      totalSegments = Math.ceil(fileSize / chunkSize);
+      ndnArray = chunkArbitraryData(name, json)
+  function onInterest(prefix, interest, transport) {
+    console.log("onInterest called.", interest);
+    if (!endsWithSegmentNumber(interest.name)) {
+      interest.name.appendSegment(0);
+    };
+    var segment = DataUtils.bigEndianToUnsignedInt(interest.name.components[interest.name.components.length - 1].value);
+    console.log(ndnArray)
+    transport.send(ndnArray[segment])
+
+  };
+  function sendWriteCommand() {
+    var onTimeout = function (interest) {
+      console.log("timeout", interest);
+    };
+    var onData = function(data) {
+      console.log(data)
+    };
+
+    destination.expressInterest((new Name(name)).append(commandMarkers["%C1.R.sw"].component), onData, onTimeout);
+    console.log("did this time correctly?")
+  };
+  destination.registerPrefix(new Name(name.toUri()), onInterest);
+  setTimeout(sendWriteCommand, 1000);
+
+};
 
 function ndnPutFile(name, file, destination, callback) {
   var chunkSize = 7000,
@@ -43,7 +73,7 @@ function ndnPutFile(name, file, destination, callback) {
   };
   onInterest.file = file;
   
-  function sendWriteCommand() {
+   function sendWriteCommand() {
     var onTimeout = function (interest) {
       console.log("timeout", interest);
     };
@@ -53,12 +83,14 @@ function ndnPutFile(name, file, destination, callback) {
 
     destination.expressInterest((new Name(name)).append(commandMarkers["%C1.R.sw"].component), onData, onTimeout);
     console.log("did this time correctly?")
-  }; 
+  };
   console.log(name, destination)
   destination.registerPrefix(new Name(name.toUri()), onInterest)
   setTimeout(sendWriteCommand, 5000)
 
 };
+
+
 
   
 

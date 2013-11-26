@@ -25,7 +25,7 @@ function b64toBlob(b64Data, contentType, sliceSize) {
 
 function chunkArbitraryData(name, data) {
   var ndnArray = [];
-  console.log(data)
+  console.log(name)
   if (typeof data == 'object') {
     var string = JSON.stringify(data);
   } else if (typeof data == 'string') {
@@ -39,7 +39,12 @@ function chunkArbitraryData(name, data) {
   var segmentNames = [];
   for (i = 0; i < stringArray.length; i++) {
     ndnArray[i] = stringArray[i]
-    ndnArray[i] = new Buffer(stringArray[i]);
+    segmentNames[i] = new Name(name).appendSegment(i)
+    co = new Data(segmentNames[i], new SignedInfo(), new Buffer(stringArray[i]));
+    co.signedInfo.setFields()
+    co.signedInfo.finalBlockID = initSegment(stringArray.length - 1)
+    co.sign()
+    ndnArray[i] = co.encode()
   };
   
   return ndnArray;
@@ -199,100 +204,4 @@ commandMarkers["%C1.R.sw"] = function startWrite( prefix, interest) {
 };
 commandMarkers["%C1.R.sw"].component = new Name.Component([0xc1, 0x2e, 0x52, 0x2e, 0x73, 0x77]);
 
-function recursiveSegmentRequest(face, prefix, objectStoreName) {
-  var dbName = prefix.toUri();
-      firstSegmentName = (new Name(prefix)).append(new Name(objectStoreName));
-      insertSegment = {};
-      
-      insertSegment.onsuccess = function(e) {
-        var currentSegment = getSegmentInteger(insertSegment.contentObject.name),
-            finalSegment = DataUtils.bigEndianToUnsignedInt(insertSegment.contentObject.signedInfo.finalBlockID);
-            
-        e.target.result.transaction(objectStoreName, "readwrite").objectStore(objectStoreName).put(insertSegment.contentObject.encode(), currentSegment).onsuccess = function(e) {
-          console.log("retrieved and stored segment ", currentSegment, " of ", finalSegment  ," into objectStore ", objectStoreName);
-          if (currentSegment < finalSegment) {
-            var newName = firstSegmentName.getPrefix(firstSegmentName.components.length - 1).appendSegment(currentSegment + 1);
-            face.expressInterest(newName, onData, onTimeout);
-          };
-        };
-      };
-  
-  function onData(interest, contentObject) {
-    console.log("onData called in recursiveSegmentRequest: ", contentObject)
-    insertSegment.contentObject = contentObject;
-    useIndexedDB(dbName, insertSegment)
-  };
-  
-  function onTimeout(interest) {
-    console.log("Interest Timed out in recursiveSegmentRequest: ", interest, new Date());
-  };
-  
-  face.expressInterest(firstSegmentName, onData, onTimeout);
-};
 
-function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
-  var dbName = prefix.toUri(),
-      properName = new Name(objectStoreName),
-      uriArray = getAllPrefixes(properName),
-      toCreate = [],
-      evaluate = {},
-      growTree = {},
-      newVersion;
- 
-      evaluate.onsuccess = function(e) {
-        for (i = 0 ; i < uriArray.length; i++) {
-          if (!e.target.result.objectStoreNames.contains(uriArray[i])) {
-            toCreate.push(uriArray[i]);
-          };
-        };
-        console.log(toCreate.length, " objectStores need to be created. Attempting to upgrade database");
-        newVersion = e.target.result.version + 1;
-        useIndexedDB(dbName, growTree, newVersion);
-      };
-      
-      
-      growTree.onupgradeneeded = function(e) {
-        console.log("growTree.onupgradeneeded fired: creating ", toCreate.length, " new objectStores");
-        for(i = 0; i < toCreate.length; i++) {
-        console.log(toCreate[i], objectStoreName)
-          if (toCreate[i] == objectStoreName) {
-            e.target.result.createObjectStore(toCreate[i])
-            
-          } else {
-            
-            e.target.result.createObjectStore(toCreate[i], {keyPath: "escapedString"});          
-          };
-        };
-      };
-      
-      growTree.onsuccess = function(e) {
-        console.log("database successfully upgraded to version ", e.target.result.version);
-        var transaction = e.target.result.transaction(uriArray, "readwrite")
-        transaction.oncomplete = function(e) {
-          console.log("New Tree successfully populated, now calling onFinished(arg) if applicable")
-          if (onFinished == recursiveSegmentRequest) {
-            if (arg) {
-              onFinished(arg, prefix, objectStoreName)
-            } else {
-              onFinished()
-            };
-          };
-        };
-        
-        uriArray.pop();
-        
-        (function populate(i) {
-          var entry = {};
-          entry.component = properName.components[i];
-          console.log(entry)
-          entry.escapedString = entry.component.toEscapedString();
-          transaction.objectStore(uriArray[i]).put(entry);
-          i++;
-          if (i < uriArray.length) {
-            populate(i);
-          };
-        })(0)
-      };
-      
-  useIndexedDB(dbName, evaluate);
-};
