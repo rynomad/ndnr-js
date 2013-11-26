@@ -39,6 +39,7 @@ ndnr.prototype.put = function (name, data, callback) {
   //ALMOST WORKING
   var hook = this
   console.log(this);
+  
   if (data instanceof File) { // called with the Filereader API
     return ndnPutFile(name, data, this);
   } else if (data instanceof Array) { // Assume we're passing a preformatted Array

@@ -170,23 +170,29 @@ function getNameWithoutCommandMarker(name) {
   return strippedName;
 };
 
+
 function getSuffix(name, p) {
     return new Name(name.components.slice(p));
 };
 
 function appendVersion(name, date) {
     if (date) {
-      var d = date
+      if (date instanceof Date) {
+        var d = date.getTime
+        
+      } else
+        var d = date;
     } else {
-      var d = new Date();
+      var d = new Date().getTime;
     };
-    var time = d.getTime().toString(16);
-
+    
+    var time = d.toString(16);          
     if (time.length % 2 == 1) {
 	    time = '0' + time;
     };
     time = 'fd' + time;
     var binTime = new Buffer(time, 'hex');
+    console.log(binTime)
     return name.append(binTime);
 };
 
