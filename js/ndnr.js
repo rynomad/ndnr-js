@@ -10,7 +10,7 @@ console.log('ndnr.js loading')
  * Database constructor
  * @prefix: application prefix (used as database name) STRING
  */
-var ndnr = function (prefix, faceParam) {
+var ndnr = function (prefix, faceParam, callback) {
 
   if(!indexedDBOk) return console.log('no indexedDb');  // No IndexedDB support
   var prefixUri = (new Name(prefix)).toUri(),           // normalize 
@@ -29,10 +29,40 @@ var ndnr = function (prefix, faceParam) {
   
   initDb.onupgradeneeded = function(e) {
     console.log("Version 1 of database ", prefixUri, "created");
+    if (callback != undefined) {
+      callback()
+    };
   };
 
   useIndexedDB(prefixUri, initDb);
 
+};
+
+ndnr.prototype.get = function (name, callback) {
+  var objectStoreName = normalizeNameToObjectStore(name)
+  console.log(objectStoreName)
+  var getRequest = {},
+      getResult = []
+  
+  getRequest.onsuccess = function (e) {
+    if (e.target.result.objectStoreNames.contains(objectStoreName)) {
+      var action = e.target.result.transaction([objectStoreName]).objectStore(objectStoreName).openCursor().onsuccess = function(e) {
+        var cursor = e.target.result;
+        console.log(e.target.result)
+        if (cursor) {
+          getResult.push(cursor.value);
+          cursor.continue();
+        }
+        else {
+          console.log("No more entries!");
+          callback(getResult)
+        }
+      };
+      
+    };
+  };
+  
+  useIndexedDB(this.prefix, getRequest);
 };
 
 ndnr.prototype.put = function (name, data, callback) {
@@ -50,6 +80,7 @@ ndnr.prototype.put = function (name, data, callback) {
   };
   
   var objectStoreName = normalizeNameToObjectStore(name)
+  console.log(objectStoreName)
   var putRequest = {};
   var dbName = this.prefix;
   this.put.data = ndnArray;
@@ -66,7 +97,10 @@ ndnr.prototype.put = function (name, data, callback) {
         if (i + 1 == ndnArray.length) {
           action.onsuccess = function (e) {
             buildObjectStoreTree(new Name(dbName), objectStoreName);
-            callback(name, hook.interestHandler.face)
+            if (callback != undefined) {
+              callback(name, hook.interestHandler.face);
+            };
+            
           };
         };
       };
@@ -87,9 +121,8 @@ ndnr.prototype.interestHandler = function(prefix, interest, transport) {
   console.log("onInterest called for incoming interest: ", interest.toUri());
   interest.face = this.onInterest.face  
   if (nameHasCommandMarker(interest.name)) {
-    var command = getCommandMarker(interest.name);
-    console.log('incoming interest has command marker ', command);
-    executeCommand(prefix, interest, command); 
+    console.log('incoming interest has command marker ', getCommandMarker(interest.name));
+    executeCommand(prefix, interest, transport); 
     return;
   } else {
     console.log('attempting to fulfill interest');
@@ -106,14 +139,24 @@ function fulfillInterest(prefix, interest, transport) {
       
   
   getContent.onsuccess = function(e) {
-    console.log(objectStoreName)
+    getContent.result = e.target.result
     if (e.target.result.objectStoreNames.contains(objectStoreName)) {
       e.target.result.transaction(objectStoreName).objectStore(objectStoreName).get(thisSegment).onsuccess = function(e) {
         console.log(e.target.result)
           transport.send(e.target.result)
       };
     } else {
-      console.log("objectStoreName not found: ", objectStoreName);
+      crawler = objectStoreName.slice(0, objectStoreName.length - 4)
+      if (e.target.result.objectStoreNames.contains(crawler)) {
+        e.target.result.transaction(crawler).objectStore(crawler).openCursor().onsuccess = function(e) {
+          var cursor = e.target.result;
+          storeName = crawler + '/' + e.target.result.value.escapedString + '/%00'
+          console.log(getContent)
+          getContent.result.transaction(storeName).objectStore(storeName).get(0).onsuccess = function(e) {
+            transport.send(e.target.result)
+          };
+        };
+      };
     };
   }; 
   
@@ -188,7 +231,6 @@ function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
       growTree.onupgradeneeded = function(e) {
         console.log("growTree.onupgradeneeded fired: creating ", toCreate.length, " new objectStores");
         for(i = 0; i < toCreate.length; i++) {
-        console.log(toCreate[i], objectStoreName)
           if (toCreate[i] == objectStoreName) {
             e.target.result.createObjectStore(toCreate[i])
             
@@ -231,10 +273,12 @@ function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
   useIndexedDB(dbName, evaluate);
 };
 
-function executeCommand(prefix, interest, command) {
+function executeCommand(prefix, interest, transport) {
+  var command = getCommandMarker(interest.name).split('%7E')[0];
+  
   if (command in commandMarkers) {
     console.log("executing recognized command ", command);
-    commandMarkers[command](prefix, interest); 
+    commandMarkers[command](prefix, interest, transport); 
   } else {
     console.log("ignoring unrecognized command ", command);
   };

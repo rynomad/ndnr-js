@@ -196,6 +196,33 @@ function appendVersion(name, date) {
     return name.append(binTime);
 };
 
+function timeToVersion(date) {
+  if (date instanceof Date) {
+    var d = date.getTime
+  } else {
+    var d = date;
+  };
+  var time = d.toString(16);          
+  if (time.length % 2 == 1) {
+    time = '0' + time;
+  };
+  time = 'fd' + time;
+  var binTime = new Buffer(time, 'hex');
+  return (new Name.Component(binTime).toEscapedString())
+  
+};
+
+function versionToTime(version) {
+  time = 0
+  array = DataUtils.toNumbers(DataUtils.toHex(version))
+  console.log(array)
+  for (i = 1; i < array.length ; i++) {
+    time = time + (array[i] * Math.pow(2, (7 - i)));
+    console.log(time)
+  };
+  return time
+};
+
 var commandMarkers = {}
 
 
