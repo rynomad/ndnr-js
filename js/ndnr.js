@@ -130,6 +130,8 @@ ndnr.prototype.interestHandler = function(prefix, interest, transport) {
   };
 };
 
+
+//TODO: Flesh out this subroutine, it is the keystone of the library, handle interest selectors, etc
 function fulfillInterest(prefix, interest, transport) {
   var localName = getSuffix(interest.name, prefix.components.length )
       objectStoreName = normalizeNameToObjectStore(localName),
