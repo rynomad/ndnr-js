@@ -23,7 +23,7 @@ function b64toBlob(b64Data, contentType, sliceSize) {
 }
 
 
-function chunkArbitraryData(name, data) {
+function chunkArbitraryData(name, data, fresh) {
   var ndnArray = [];
   console.log(name)
   if (typeof data == 'object') {
@@ -43,6 +43,9 @@ function chunkArbitraryData(name, data) {
     co = new Data(segmentNames[i], new SignedInfo(), new Buffer(stringArray[i]));
     co.signedInfo.setFields()
     co.signedInfo.finalBlockID = initSegment(stringArray.length - 1)
+    if (fresh != undefined) {
+      co.signedInfo.freshnessSeconds = fresh
+    }
     co.sign()
     ndnArray[i] = co.encode()
   };

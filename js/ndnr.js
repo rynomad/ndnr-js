@@ -74,6 +74,7 @@ ndnr.prototype.put = function (name, data, callback) {
     return ndnPutFile(name, data, this);
   } else if (data instanceof Array) { // Assume we're passing a preformatted Array
     var ndnArray = data;
+    console.log(data)
   } else { // anything else
     //console.log(data)
     var ndnArray = chunkArbitraryData(new Name(this.prefix).append(name), data);
@@ -138,7 +139,7 @@ function fulfillInterest(prefix, interest, transport) {
       thisSegment = getSegmentInteger(localName),
       dbName = prefix.toUri(),
       getContent = {};
-      
+      console.log(thisSegment, localName)
   
   getContent.onsuccess = function(e) {
     getContent.result = e.target.result
@@ -149,11 +150,12 @@ function fulfillInterest(prefix, interest, transport) {
       };
     } else {
       crawler = objectStoreName.slice(0, objectStoreName.length - 4)
+      console.log(crawler)
       if (e.target.result.objectStoreNames.contains(crawler)) {
         e.target.result.transaction(crawler).objectStore(crawler).openCursor().onsuccess = function(e) {
           var cursor = e.target.result;
           storeName = crawler + '/' + e.target.result.value.escapedString + '/%00'
-          console.log(getContent)
+          console.log(storeName)
           getContent.result.transaction(storeName).objectStore(storeName).get(0).onsuccess = function(e) {
             transport.send(e.target.result)
           };
