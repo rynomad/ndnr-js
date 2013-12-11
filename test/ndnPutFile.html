@@ -8,11 +8,11 @@
 <body>
 <script>
 
-var face = new Face({host: location.host.split(':')[0]});
+var face = new Face({host: "localhost"});
 
 
 </script>
 
-<input id="image-file" type="file" onchange="ndnPutFile(new Name(this.files[0].name), this.files[0], face)" />
+<input id="image-file" type="file" onchange="ndnPutFile(new Name('wiki/mime/' + this.files[0].type + '/' + this.files[0].name), this.files[0], face)" />
 </body>
 </html>

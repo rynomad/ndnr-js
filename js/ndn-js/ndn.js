@@ -280,7 +280,7 @@ exports.Log = Log;
  * LOG is the level for logging debugging statements.  0 means no log messages. 
  * @type Number
  */
-Log.LOG = 0;
+Log.LOG = 4;
 /**
  * Copyright (C) 2013 Regents of the University of California.
  * @author: Meki Cheraoui
@@ -2470,7 +2470,7 @@ WebSocketTransport.prototype.connect = function(face, onopenCallback)
       console.log('INVALID ANSWER');
     } else if (result instanceof ArrayBuffer) {
           var bytearray = new Buffer(result);
-          
+      console.log(Buffer)
       if (LOG > 3) console.log('BINARY RESPONSE IS ' + bytearray.toString('hex'));
       
       try {

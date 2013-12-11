@@ -136,36 +136,87 @@ ndnr.prototype.interestHandler = function(prefix, interest, transport) {
 function fulfillInterest(prefix, interest, transport) {
   var localName = getSuffix(interest.name, prefix.components.length )
       objectStoreName = normalizeNameToObjectStore(localName),
-      thisSegment = getSegmentInteger(localName),
       dbName = prefix.toUri(),
-      getContent = {};
-      console.log(thisSegment, localName)
-  
-  getContent.onsuccess = function(e) {
-    getContent.result = e.target.result
-    if (e.target.result.objectStoreNames.contains(objectStoreName)) {
-      e.target.result.transaction(objectStoreName).objectStore(objectStoreName).get(thisSegment).onsuccess = function(e) {
-        console.log(e.target.result)
-          transport.send(e.target.result)
+      getContent = {},
+      suffixIndex = 0,
+      query = localName.toUri();
+      if ((interest.childSelector == 0) || (interest.childSelector == undefined)) {
+        cursorOrder = "next";
+      } else {
+        cursorOrder = "prev";
       };
-    } else {
-      crawler = objectStoreName.slice(0, objectStoreName.length - 4)
-      console.log(crawler)
-      if (e.target.result.objectStoreNames.contains(crawler)) {
-        e.target.result.transaction(crawler).objectStore(crawler).openCursor().onsuccess = function(e) {
-          var cursor = e.target.result;
-          storeName = crawler + '/' + e.target.result.value.escapedString + '/%00'
-          console.log(storeName)
-          getContent.result.transaction(storeName).objectStore(storeName).get(0).onsuccess = function(e) {
-            transport.send(e.target.result)
+      
+  if (endsWithSegmentNumber(interest.name)) {
+    // A specific segment of a data object is being requested, so don't bother querying for loose matches, just return or drop
+    requestedSegment = getSegmentInteger(interest.name)
+    getContent.onsuccess = function(e) {
+      getContent.result = e.target.result;
+      if (e.target.result.objectStoreNames.contains(objectStoreName)) {
+        e.target.result.transaction(objectStoreName).objectStore(objectStoreName).get(requestedSegment).onsuccess = function(e) {
+          transport.send(e.target.result)
+        };
+      } else {
+        console.log("no data for ", interest)
+      };
+    };
+  } else {
+    // A general interest. Interpret according to selectors and return the first segment of the best matching dataset
+    getContent.onsuccess = function(e) {
+      db = getContent.result = e.target.result
+      function crawl(q) {
+        console.log(q)
+        if (db.objectStoreNames.contains(q)) {
+          var store = db.transaction(q).objectStore(q),
+              index = store.index('escapedString');
+          console.log('objectStoreNames contains ', q)
+          if ((interest.maxSuffixComponents == null) || (suffixIndex <= interest.maxSuffixComponents)) {
+            console.log('Suffix count within constraints')
+            index.openCursor(null, cursorOrder).onsuccess = function(e) {
+              var cursor = e.target.result;
+              if (cursor) {
+                if ((interest.exclude == null) || (!interest.exclude.matches(new Name.Component(cursor.value.escapedString)))) {
+                  console.log(cursor.value.escapedString)
+                  if (cursor.value.escapedString == "%00") {
+                    console.log('got to data')
+                    if ((interest.minSuffixComponents == null) || (suffixIndex >= interest.minSuffixComponents )) {
+                      console.log('more than minimum suffix comps')
+                      query += '/' + cursor.value.escapedString
+                      console.log(query)
+                     
+                      store = db.transaction(query).objectStore(query).get(0).onsuccess = function(e) {
+                        transport.send(e.target.result)
+                      };
+                    } else {
+                      cursor.continue()
+                    };
+                  } else {
+                    suffixIndex++
+                    if (query != '/') {
+                      query += '/' + cursor.value.escapedString
+                    } else {
+                      query += cursor.value.escapedString
+                    }
+                    
+                    crawl(query)
+                  };
+                } else {
+                  cursor.continue()
+                };
+              } else {
+                console.log('no entries ')
+              };
+            };
+          } else {
+            console.log('too many suffix components')
           };
         };
       };
+      crawl(query)
     };
-  }; 
-  
+  };
   useIndexedDB(dbName, getContent);
 };
+
 
 function recursiveSegmentRequest(face, prefix, objectStoreName) {
   var dbName = prefix.toUri();
@@ -240,7 +291,9 @@ function buildObjectStoreTree(prefix, objectStoreName, onFinished, arg) {
             
           } else {
             
-            e.target.result.createObjectStore(toCreate[i], {keyPath: "escapedString"});          
+            var store = e.target.result.createObjectStore(toCreate[i], {keyPath: "escapedString"});
+            store.createIndex('escapedString', 'escapedString', {unique: true})
+                      
           };
         };
       };
